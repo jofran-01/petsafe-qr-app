@@ -1,0 +1,161 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/customSupabaseClient';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Loader2, ArrowLeft, HeartPulse, Stethoscope, Syringe, Pill, Download, Bug } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import { Helmet } from 'react-helmet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import jsPDF from 'jspdf';
+
+const RecordList = ({ records, title, fields, renderBadge }) => (
+    <div className="space-y-4">
+         {records.length > 0 ? records.map(record => (
+            <Card key={record.id} className="bg-card/50">
+                <CardHeader className="pb-4">
+                    <CardTitle className="text-base flex justify-between items-center">
+                        <span>{fields.title(record)}</span>
+                        {renderBadge && renderBadge(record)}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {fields.details.map(detail => (
+                        <p key={detail.label} className="text-sm text-muted-foreground">
+                            <strong>{detail.label}:</strong> {detail.value(record) || 'N/A'}
+                        </p>
+                    ))}
+                </CardContent>
+            </Card>
+        )) : <p className="text-center text-muted-foreground py-8">Nenhum registro encontrado.</p>}
+    </div>
+);
+
+
+const TutorPetMedicalRecordPage = () => {
+    const { id } = useParams();
+    const { toast } = useToast();
+    const navigate = useNavigate();
+    const [pet, setPet] = useState(null);
+    const [records, setRecords] = useState({ consultations: [], vaccines: [], deworming: [], antiparasitics: [] });
+    const [loading, setLoading] = useState(true);
+    const reportRef = useRef(null);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.from('animais').select(`*`).eq('id', id).single();
+            if (error) throw error;
+            setPet(data);
+
+            const [consultationsRes, vaccinesRes, dewormingRes, antiparasiticsRes] = await Promise.all([
+                supabase.from('consultas').select('*, usuarios_clinicas(nome_clinica)').eq('animal_id', id).order('data_consulta', { ascending: false }),
+                supabase.from('vacinas').select('*').eq('animal_id', id).order('data_aplicacao', { ascending: false }),
+                supabase.from('vermifugacao').select('*').eq('animal_id', id).order('data_aplicacao', { ascending: false }),
+                supabase.from('antiparasitarios').select('*').eq('animal_id', id).order('data_aplicacao', { ascending: false }),
+            ]);
+
+            setRecords({
+                consultations: consultationsRes.data || [],
+                vaccines: vaccinesRes.data || [],
+                deworming: dewormingRes.data || [],
+                antiparasitics: antiparasiticsRes.data || [],
+            });
+
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Erro ao buscar prontuário', description: error.message });
+        } finally {
+            setLoading(false);
+        }
+    }, [id, toast]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleExportPDF = () => {
+        if (!pet) return;
+        const doc = new jsPDF();
+        // ... Implementation similar to PetPublicPage ...
+        doc.save(`prontuario_${pet.nome}.pdf`);
+        toast({ title: "PDF Gerado", description: "O prontuário foi exportado." });
+    };
+
+    if (loading) return <div className="flex justify-center items-center h-full"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>;
+    if (!pet) return <div className="text-center"><h1 className="text-2xl font-bold">Pet não encontrado</h1><Button onClick={() => navigate('/tutor/dashboard/prontuarios')} className="mt-4">Voltar</Button></div>;
+    
+    return (
+        <div ref={reportRef}>
+        <Helmet><title>{`Prontuário de ${pet.nome} - PetSafe QR`}</title></Helmet>
+        <div className="flex items-center justify-between mb-4">
+            <Button variant="outline" onClick={() => navigate('/tutor/dashboard/prontuarios')}><ArrowLeft className="mr-2 h-4 w-4"/> Voltar</Button>
+            <Button onClick={handleExportPDF}><Download className="mr-2 h-4 w-4" /> Exportar PDF</Button>
+        </div>
+        
+        <Card className="mb-6">
+            <CardHeader className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                <img
+                  src={pet.foto_url || 'https://ylyahsovfcolgdwisbll.supabase.co/storage/v1/object/public/pet-avatars/default-pet-avatar.png'}
+                  alt={`Foto de ${pet.nome}`}
+                  className="w-24 h-24 rounded-full object-cover border-4 border-primary"
+                />
+                <div className="flex-1">
+                    <CardTitle className="text-3xl font-bold text-primary">{pet.nome}</CardTitle>
+                    <CardDescription>{pet.especie} - {pet.raca}</CardDescription>
+                </div>
+            </CardHeader>
+        </Card>
+
+        <Tabs defaultValue="consultations">
+            <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="consultations"><Stethoscope className="mr-1 h-4 w-4"/>Consultas</TabsTrigger>
+                <TabsTrigger value="vaccines"><Syringe className="mr-1 h-4 w-4"/>Vacinas</TabsTrigger>
+                <TabsTrigger value="deworming"><Pill className="mr-1 h-4 w-4"/>Vermífugos</TabsTrigger>
+                <TabsTrigger value="antiparasitics"><Bug className="mr-1 h-4 w-4"/>Antiparasit.</TabsTrigger>
+            </TabsList>
+            <TabsContent value="consultations" className="mt-4">
+                <RecordList 
+                    records={records.consultations}
+                    title="Consultas"
+                    fields={{
+                        title: (r) => `Consulta de ${new Date(r.data_consulta).toLocaleDateString()}`,
+                        details: [
+                            { label: 'Diagnóstico', value: (r) => r.diagnostico },
+                            { label: 'Tratamento', value: (r) => r.tratamento },
+                        ]
+                    }}
+                    renderBadge={(r) => <Badge variant="outline">{r.usuarios_clinicas?.nome_clinica}</Badge>}
+                />
+            </TabsContent>
+                <TabsContent value="vaccines" className="mt-4">
+                <RecordList records={records.vaccines} title="Vacinas" fields={{
+                        title: (r) => r.nome_vacina,
+                        details: [
+                        { label: 'Aplicação', value: (r) => new Date(r.data_aplicacao).toLocaleDateString() },
+                        { label: 'Vencimento', value: (r) => r.data_vencimento ? new Date(r.data_vencimento).toLocaleDateString() : 'N/A' },
+                        ]
+                }} />
+            </TabsContent>
+            <TabsContent value="deworming" className="mt-4">
+                <RecordList records={records.deworming} title="Vermífugos" fields={{
+                        title: (r) => r.produto,
+                        details: [
+                        { label: 'Aplicação', value: (r) => new Date(r.data_aplicacao).toLocaleDateString() },
+                        { label: 'Próxima Dose', value: (r) => r.proxima_dose ? new Date(r.proxima_dose).toLocaleDateString() : 'N/A' },
+                        ]
+                }} />
+            </TabsContent>
+                <TabsContent value="antiparasitics" className="mt-4">
+                <RecordList records={records.antiparasitics} title="Antiparasitários" fields={{
+                        title: (r) => r.produto,
+                        details: [
+                        { label: 'Aplicação', value: (r) => new Date(r.data_aplicacao).toLocaleDateString() },
+                        { label: 'Próxima Dose', value: (r) => r.proxima_dose ? new Date(r.proxima_dose).toLocaleDateString() : 'N/A' },
+                        ]
+                }} />
+            </TabsContent>
+        </Tabs>
+        </div>
+    );
+};
+
+export default TutorPetMedicalRecordPage;

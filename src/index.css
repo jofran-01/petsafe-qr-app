@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 243 96% 70%;
+    --primary-foreground: 0 0% 100%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 243 96% 70%;
+ 
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 243 96% 70%;
+    --primary-foreground: 0 0% 100%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 243 96% 70%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  /* General Button Styles */
+  .fc .fc-button {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 !important;
+    @apply rounded-md text-sm font-medium transition-colors !important;
+    @apply h-9 px-3 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .fc .fc-button:focus {
+    @apply ring-2 ring-ring ring-offset-2 ring-offset-background !important;
+  }
+
+  /* Active/Pressed Button Styles */
+  .fc .fc-button-primary:not(:disabled).fc-button-active,
+  .fc .fc-button-primary:not(:disabled):active {
+     @apply bg-primary text-primary-foreground !important;
+  }
+
+  /* Toolbar Title */
+  .fc .fc-toolbar-title {
+    @apply text-xl font-bold text-foreground;
+  }
+
+  /* Grid and Cell Borders */
+  .fc-theme-standard .fc-scrollgrid,
+  .fc-theme-standard th, .fc-theme-standard td {
+    @apply border-border;
+  }
+
+  /* Today's Date Background */
+  .fc .fc-day-today {
+    @apply bg-accent/50;
+  }
+
+  /* Header cell background (for day names) */
+  .fc .fc-col-header-cell {
+    @apply bg-muted/40;
+  }
+
+  /* Event Styles */
+  .fc .fc-event {
+    @apply rounded-lg border-l-4 p-1.5 shadow-md !important;
+    @apply cursor-pointer !important;
+  }
+  .fc .fc-event-main {
+     @apply font-semibold;
+  }
+  .fc .fc-event-time {
+    @apply font-bold mr-1.5;
+  }
+   .fc .fc-event-title {
+    white-space: normal !important;
+  }
+  .fc-v-event .fc-event-title {
+    @apply font-normal;
+  }
+  .fc .fc-h-event {
+    @apply bg-primary/20 border-primary text-primary-foreground;
+  }
+
+  /* Text Colors for Day Numbers and Headers */
+  .fc .fc-daygrid-day-number {
+    @apply text-foreground;
+  }
+  
+  .fc .fc-col-header-cell-cushion {
+    @apply text-foreground font-bold;
+  }
+
+  /* Muted color for days in other months */
+  .fc .fc-day-other .fc-daygrid-day-number {
+    @apply text-muted-foreground opacity-60;
+  }
+}
