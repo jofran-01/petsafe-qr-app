@@ -4,14 +4,15 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { PlusCircle, Loader2, UploadCloud, FileText, Trash2, Edit } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { PlusCircle, Loader2, UploadCloud, FileText, Trash2, Edit, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// O componente PetForm permanece o mesmo, pois a lógica dele está correta.
 const PetForm = ({ onFormSubmit, petData, isEditing = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -90,7 +91,7 @@ const PetForm = ({ onFormSubmit, petData, isEditing = false }) => {
         </div>
         <div className="grid gap-2">
             <Label htmlFor="sexo">Sexo</Label>
-             <Select value={formData.sexo} onValueChange={(value) => handleSelectChange('sexo', value)}>
+             <Select value={formData.sexo || ''} onValueChange={(value) => handleSelectChange('sexo', value)}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                 <SelectItem value="Macho">Macho</SelectItem>
@@ -123,6 +124,10 @@ const TutorPetsPage = () => {
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false);
   const [petImageFile, setPetImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // --- NOVOS ESTADOS PARA O MODAL DE EXCLUSÃO ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPets = useCallback(async () => {
     if (!user) return;
@@ -217,11 +222,43 @@ const TutorPetsPage = () => {
     }
   };
   
-  const handleNotImplemented = () => {
-     toast({
-      title: "🚧 Em breve!",
-      description: "A exclusão de pets ainda não foi implementada.",
-    });
+  // --- NOVA FUNÇÃO PARA ABRIR O MODAL DE CONFIRMAÇÃO ---
+  const handleDeleteClick = (pet) => {
+    setSelectedPet(pet);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // --- NOVA FUNÇÃO QUE REALMENTE DELETA O PET ---
+  const handleDeletePet = async () => {
+    if (!selectedPet) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('animais')
+        .delete()
+        .eq('id', selectedPet.id);
+
+      if (error) throw error;
+
+      if (selectedPet.foto_url) {
+        const filePath = `${user.id}/${selectedPet.id}/`;
+        const { data: listData } = await supabase.storage.from('pet-avatars').list(filePath);
+        if (listData && listData.length > 0) {
+          const filesToRemove = listData.map(file => `${filePath}${file.name}`);
+          await supabase.storage.from('pet-avatars').remove(filesToRemove);
+        }
+      }
+
+      toast({ title: "Sucesso!", description: `${selectedPet.nome} foi removido.` });
+      fetchPets();
+      setIsDeleteDialogOpen(false);
+      setSelectedPet(null);
+
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Erro ao excluir pet', description: error.message });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -266,6 +303,30 @@ const TutorPetsPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* --- NOVO DIALOG PARA CONFIRMAR A EXCLUSÃO --- */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-destructive" />
+              Confirmar Exclusão
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              Você tem certeza que deseja excluir <strong>{selectedPet?.nome}</strong>? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeletePet} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Sim, Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {loading ? (
         <div className="flex justify-center items-center h-40">
@@ -292,14 +353,15 @@ const TutorPetsPage = () => {
                 </div>
               </CardHeader>
               <CardContent className="flex-grow flex flex-col justify-end gap-2">
-                <Button onClick={() => navigate(`/tutor/dashboard/pets/${pet.id}/carteirinha`)}>
+                <Button onClick={( ) => navigate(`/tutor/dashboard/pets/${pet.id}/carteirinha`)}>
                   <FileText className="mr-2 h-4 w-4" /> Ver Carteirinha
                 </Button>
                 <div className="flex gap-2">
                     <Button variant="outline" className="w-full" onClick={() => handleEditClick(pet)}>
                         <Edit className="mr-2 h-4 w-4" /> Editar
                     </Button>
-                     <Button variant="destructive" className="w-full" onClick={handleNotImplemented}>
+                     {/* --- BOTÃO DE EXCLUIR AGORA CHAMA A FUNÇÃO CORRETA --- */}
+                     <Button variant="destructive" className="w-full" onClick={() => handleDeleteClick(pet)}>
                         <Trash2 className="mr-2 h-4 w-4" /> Excluir
                     </Button>
                 </div>

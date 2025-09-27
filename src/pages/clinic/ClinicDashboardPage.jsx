@@ -109,7 +109,9 @@ const ClinicDashboardPage = () => {
                     <CardContent>
                         {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">{stats.pendingAppointments}</div>}
                         <p className="text-xs text-muted-foreground">
-                            <Link to="/dashboard/agendamentos" className="underline">Revisar solicitações</Link>
+                            {/* ================== CORREÇÃO APLICADA AQUI ================== */}
+                            <Link to="/dashboard/solicitacoes" className="underline">Revisar solicitações</Link>
+                            {/* ============================================================ */}
                         </p>
                     </CardContent>
                 </Card>

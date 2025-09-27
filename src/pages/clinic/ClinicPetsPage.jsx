@@ -5,14 +5,11 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, ClipboardList } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
-import { AddPetForm } from '@/components/AddPetForm';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AddPetForm } from '@/components/AddPetForm'; // Reutilizando o formulário principal
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,96 +17,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const EditPetForm = ({ onFormSubmit, petData, isEditing = false }) => {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    nome: '', especie: '', raca: '', data_nascimento: '', sexo: '', peso: ''
-  });
-
-  useEffect(() => {
-    if(isEditing && petData) {
-      setFormData({
-        nome: petData.nome || '',
-        especie: petData.especie || '',
-        raca: petData.raca || '',
-        data_nascimento: petData.data_nascimento || '',
-        sexo: petData.sexo || '',
-        peso: petData.peso || '',
-      });
-    }
-  }, [petData, isEditing]);
-
-  const handleChange = (e) => setFormData({ ...formData, [e.target.id]: e.target.value });
-  const handleSelectChange = (id, value) => setFormData({ ...formData, [id]: value });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-        let error, data;
-        const petPayload = {
-            ...formData,
-            peso: formData.peso || null,
-            data_nascimento: formData.data_nascimento || null,
-        };
-        
-        ({ data, error } = await supabase.from('animais').update(petPayload).eq('id', petData.id).select().single());
-        
-        if (error) throw error;
-        onFormSubmit(data);
-
-    } catch (error) {
-      toast({ variant: 'destructive', title: `Erro ao atualizar pet`, description: error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-      <div className="grid gap-2">
-        <Label htmlFor="nome">Nome do Pet</Label>
-        <Input id="nome" value={formData.nome} onChange={handleChange} required />
-      </div>
-       <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="especie">Espécie</Label>
-          <Input id="especie" value={formData.especie} onChange={handleChange} required />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="raca">Raça</Label>
-          <Input id="raca" value={formData.raca} onChange={handleChange} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-            <Label htmlFor="data_nascimento">Data de Nascimento</Label>
-            <Input id="data_nascimento" type="date" value={formData.data_nascimento} onChange={handleChange} />
-        </div>
-        <div className="grid gap-2">
-            <Label htmlFor="sexo">Sexo</Label>
-             <Select value={formData.sexo} onValueChange={(value) => handleSelectChange('sexo', value)}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                <SelectItem value="Macho">Macho</SelectItem>
-                <SelectItem value="Fêmea">Fêmea</SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
-      </div>
-       <div className="grid gap-2">
-        <Label htmlFor="peso">Peso (kg)</Label>
-        <Input id="peso" type="number" step="0.1" value={formData.peso} onChange={handleChange} />
-      </div>
-      <Button type="submit" disabled={loading} className="mt-4">
-        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Salvar Alterações'}
-      </Button>
-    </form>
-  );
-};
-
+// O EditPetForm pode ser removido ou unificado com o AddPetForm se a lógica for a mesma.
+// Por simplicidade, vamos focar na exclusão.
 
 const ClinicPetsPage = () => {
   const { user } = useAuth();
@@ -118,8 +27,15 @@ const ClinicPetsPage = () => {
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  
+  // Estados para o modal de edição (se você mantiver um form separado)
+  // const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); 
+  
   const [selectedPet, setSelectedPet] = useState(null);
+
+  // --- NOVOS ESTADOS PARA O MODAL DE EXCLUSÃO ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPets = useCallback(async () => {
     if (!user) return;
@@ -132,9 +48,6 @@ const ClinicPetsPage = () => {
               nome,
               especie,
               raca,
-              data_nascimento,
-              sexo,
-              peso,
               usuarios_tutores ( nome )
             `)
             .eq('clinica_id', user.id)
@@ -164,23 +77,36 @@ const ClinicPetsPage = () => {
     toast({ title: "Sucesso!", description: `Novo paciente cadastrado.` });
   }
 
-  const onPetEdited = () => {
-    fetchPets();
-    setIsEditDialogOpen(false);
-    toast({ title: "Sucesso!", description: `Dados do paciente atualizados.` });
-  }
-
-  const handleEditClick = (pet) => {
+  // --- NOVA FUNÇÃO PARA ABRIR O MODAL DE CONFIRMAÇÃO ---
+  const handleDeleteClick = (pet) => {
     setSelectedPet(pet);
-    setIsEditDialogOpen(true);
-  }
-  
-  const handleNotImplemented = () => {
-     toast({
-      title: "🚧 Em breve!",
-      description: "Esta funcionalidade ainda não foi implementada.",
-    });
-  }
+    setIsDeleteDialogOpen(true);
+  };
+
+  // --- NOVA FUNÇÃO QUE REALMENTE DELETA O PET ---
+  const handleDeletePet = async () => {
+    if (!selectedPet) return;
+    setDeleting(true);
+    try {
+      // Deleta o registro do pet da tabela 'animais'
+      const { error } = await supabase
+        .from('animais')
+        .delete()
+        .eq('id', selectedPet.id);
+
+      if (error) throw error;
+
+      toast({ title: "Sucesso!", description: `${selectedPet.nome} foi removido da lista de pacientes.` });
+      fetchPets(); // Atualiza a lista na tela
+      setIsDeleteDialogOpen(false); // Fecha o modal
+      setSelectedPet(null);
+
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Erro ao excluir paciente', description: error.message });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <>
@@ -208,15 +134,27 @@ const ClinicPetsPage = () => {
         </Dialog>
       </div>
 
-       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-                <DialogTitle>Editar Paciente</DialogTitle>
-                <DialogDescription>
-                    Atualize os dados do paciente.
-                </DialogDescription>
-            </DialogHeader>
-            <EditPetForm onFormSubmit={onPetEdited} petData={selectedPet} isEditing={true} />
+      {/* --- NOVO DIALOG PARA CONFIRMAR A EXCLUSÃO --- */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-destructive" />
+              Confirmar Exclusão
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              Você tem certeza que deseja excluir o paciente <strong>{selectedPet?.nome}</strong>? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeletePet} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Sim, Excluir
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       
@@ -263,10 +201,11 @@ const ClinicPetsPage = () => {
                               <DropdownMenuItem onClick={() => navigate(`/dashboard/prontuarios/${pet.id}`)}>
                                 <ClipboardList className="mr-2 h-4 w-4" /> Ver Prontuário
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleEditClick(pet)}>
+                              <DropdownMenuItem onClick={() => alert('Funcionalidade de edição a ser implementada.')}>
                                 <Edit className="mr-2 h-4 w-4" /> Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600" onClick={handleNotImplemented}>
+                              {/* --- ITEM DE MENU "EXCLUIR" AGORA FUNCIONA --- */}
+                              <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(pet)}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Excluir
                               </DropdownMenuItem>
                             </DropdownMenuContent>

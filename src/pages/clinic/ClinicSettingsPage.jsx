@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -19,6 +18,8 @@ const ClinicSettingsPage = () => {
     const { setTheme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    
+    const [originalClinicData, setOriginalClinicData] = useState(null);
     const [clinicData, setClinicData] = useState({
         tipo_cadastro: 'juridica',
         razao_social: '',
@@ -58,21 +59,25 @@ const ClinicSettingsPage = () => {
 
             if (error && error.code !== 'PGRST116') throw error;
 
-            if (data) {
-                const updatedData = { ...clinicData, ...data, tipo_cadastro: data.tipo_cadastro || 'juridica' };
-                setClinicData(updatedData);
-                if (data.logo_url) {
-                    setLogoPreview(data.logo_url);
-                }
-            } else {
-                 setClinicData(prev => ({ ...prev, email: user.email }));
+            const initialData = {
+                tipo_cadastro: 'juridica', razao_social: '', nome_fantasia: '', responsavel: '', cnpj: '', cpf: '',
+                inscricao_estadual: '', inscricao_municipal: '', telefone: '', telefone2: '', email: user.email, site: '',
+                cep: '', estado: '', cidade: '', cod_ibge: '', tipo_endereco: '', endereco: '', numero: '',
+                complemento: '', bairro: '', logo_url: '',
+            };
+
+            const fullData = { ...initialData, ...data };
+            setClinicData(fullData);
+            setOriginalClinicData(fullData);
+            if (fullData.logo_url) {
+                setLogoPreview(fullData.logo_url);
             }
         } catch (error) {
             toast({ variant: 'destructive', title: 'Erro ao carregar dados', description: error.message });
         } finally {
             setLoading(false);
         }
-    }, [user, toast]);
+    }, [user]);
 
     useEffect(() => {
         fetchClinicData();
@@ -122,15 +127,26 @@ const ClinicSettingsPage = () => {
                 logoUrlToSave = null;
             }
 
-            const dataToUpdate = { ...clinicData, logo_url: logoUrlToSave };
-            delete dataToUpdate.created_at;
-            delete dataToUpdate.updated_at;
-            delete dataToUpdate.id;
-            delete dataToUpdate.email;
+            const changes = {};
+            for (const key in clinicData) {
+                if (clinicData[key] !== originalClinicData[key]) {
+                    changes[key] = clinicData[key];
+                }
+            }
+            
+            if (logoUrlToSave !== originalClinicData.logo_url) {
+                changes.logo_url = logoUrlToSave;
+            }
+
+            if (Object.keys(changes).length === 0) {
+                toast({ title: 'Nenhuma alteração', description: 'Nenhum dado foi modificado para ser salvo.' });
+                setSaving(false);
+                return;
+            }
 
             const { error } = await supabase
                 .from('usuarios_clinicas')
-                .update(dataToUpdate)
+                .update(changes)
                 .eq('id', user.id);
 
             if (error) throw error;
@@ -166,6 +182,7 @@ const ClinicSettingsPage = () => {
                             <CardDescription>Gerencie as informações da sua empresa.</CardDescription>
                         </CardHeader>
                         <CardContent>
+                            {/* ================== SEU LAYOUT VISUAL RESTAURADO ================== */}
                             <div className="p-4 mb-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-600">
                                 <p><strong>Dica!</strong> As informações preenchidas abaixo serão usadas em várias áreas do sistema (inclusive impressões), por isso, preencha-as com muita atenção.</p>
                             </div>
@@ -237,8 +254,8 @@ const ClinicSettingsPage = () => {
                                     ) : (
                                         <>
                                             <div className="md:col-span-2">
-                                                <Label htmlFor="nome_clinica">Nome *</Label>
-                                                <Input id="nome_clinica" value={clinicData.nome_clinica || ''} onChange={handleInputChange} />
+                                                <Label htmlFor="nome_fantasia">Nome *</Label>
+                                                <Input id="nome_fantasia" value={clinicData.nome_fantasia || ''} onChange={handleInputChange} />
                                             </div>
                                             <div>
                                                 <Label htmlFor="cpf">CPF *</Label>
@@ -307,6 +324,7 @@ const ClinicSettingsPage = () => {
                                     </div>
                                 </div>
                             </div>
+                            {/* ==================================================================== */}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -323,7 +341,6 @@ const ClinicSettingsPage = () => {
                                 <div className="flex items-center space-x-2 pt-2">
                                     <Button variant="outline" onClick={() => setTheme('light')}>Claro</Button>
                                     <Button variant="outline" onClick={() => setTheme('dark')}>Escuro</Button>
-                                    <Button variant="outline" onClick={() => setTheme('system')}>Padrão do Sistema</Button>
                                 </div>
                             </div>
                         </CardContent>

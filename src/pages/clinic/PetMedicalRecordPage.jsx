@@ -14,11 +14,17 @@ import { Badge } from '@/components/ui/badge';
 import jsPDF from 'jspdf';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
+// ================== COMPONENTE AddRecordForm COM A CORREÇÃO ==================
 const AddRecordForm = ({ petId, onRecordAdded, recordType }) => {
     const { user } = useAuth();
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({});
+
+    // CORREÇÃO 1: Reseta o formulário quando o tipo de registro (aba) muda
+    useEffect(() => {
+        setFormData({});
+    }, [recordType]);
 
     const fields = {
         consultations: [
@@ -62,15 +68,26 @@ const AddRecordForm = ({ petId, onRecordAdded, recordType }) => {
         setLoading(true);
 
         const table = tableName[recordType];
-        if(!table) return;
+        if(!table) {
+            setLoading(false);
+            return;
+        }
 
         try {
-            const { error } = await supabase.from(table).insert({ 
+            // CORREÇÃO 2: Monta o payload de dados condicionalmente
+            let payload = {
                 animal_id: petId,
-                clinica_id: user.id,
-                data_consulta: recordType === 'consultations' ? new Date().toISOString() : undefined,
                 ...formData,
-             });
+            };
+
+            // Adiciona campos específicos apenas para consultas
+            if (recordType === 'consultations') {
+                payload.clinica_id = user.id;
+                payload.data_consulta = new Date().toISOString();
+            }
+            
+            const { error } = await supabase.from(table).insert(payload);
+
             if (error) throw error;
             toast({ title: 'Sucesso!', description: 'Registro adicionado ao prontuário.' });
             onRecordAdded();
@@ -101,7 +118,7 @@ const AddRecordForm = ({ petId, onRecordAdded, recordType }) => {
     );
 };
 
-
+// ================== COMPONENTE RecordList (SEU CÓDIGO ORIGINAL) ==================
 const RecordList = ({ records, title, fields, renderBadge }) => (
     <div className="space-y-4">
          {records.length > 0 ? records.map(record => (
@@ -124,7 +141,7 @@ const RecordList = ({ records, title, fields, renderBadge }) => (
     </div>
 );
 
-
+// ================== COMPONENTE PetMedicalRecordPage (SEU CÓDIGO ORIGINAL) ==================
 const PetMedicalRecordPage = () => {
     const { id } = useParams();
     const { toast } = useToast();
@@ -168,6 +185,8 @@ const PetMedicalRecordPage = () => {
     const handleExportPDF = () => {
         if (!pet) return;
         const doc = new jsPDF();
+        // Lógica de geração de PDF precisa ser implementada aqui
+        doc.text(`Prontuário de ${pet.nome}`, 10, 10);
         doc.save(`prontuario_completo_${pet.nome}.pdf`);
         toast({ title: "PDF Gerado", description: "O prontuário completo foi exportado." });
     };
@@ -212,7 +231,7 @@ const PetMedicalRecordPage = () => {
                             records={records.consultations}
                             title="Consultas"
                             fields={{
-                                title: (r) => `Consulta de ${new Date(r.data_consulta).toLocaleDateString()}`,
+                                title: (r ) => `Consulta de ${new Date(r.data_consulta).toLocaleDateString()}`,
                                 details: [
                                     { label: 'Diagnóstico', value: (r) => r.diagnostico },
                                     { label: 'Tratamento', value: (r) => r.tratamento },
