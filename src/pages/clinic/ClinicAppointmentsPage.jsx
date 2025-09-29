@@ -24,6 +24,7 @@ const ClinicAppointmentsPage = () => {
     const { toast } = useToast();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [updating, setUpdating] = useState(false); // Novo estado para o loading dos botões
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [time, setTime] = useState('');
@@ -31,17 +32,18 @@ const ClinicAppointmentsPage = () => {
     const [rejectionReason, setRejectionReason] = useState('');
     const [isRejection, setIsRejection] = useState(false);
 
-
     const fetchRequests = useCallback(async () => {
         if (!user) return;
         setLoading(true);
         try {
+            // ================== MUDANÇA 1: Buscar o ID do animal ==================
             const { data, error } = await supabase
                 .from('agendamentos')
                 .select(`
                     id,
                     data_agendamento,
                     observacoes,
+                    animal_id, 
                     animais ( nome ),
                     usuarios_tutores ( nome, email )
                 `)
@@ -74,45 +76,61 @@ const ClinicAppointmentsPage = () => {
         setIsDialogOpen(true);
     };
 
+    // ================== MUDANÇA 2: Lógica de aprovação atualizada ==================
     const handleUpdateStatus = async (status) => {
         if (!selectedRequest) return;
-        
-        const updateData = { status, motivo_recusa: null };
+        setUpdating(true);
+
         if (status === 'Confirmado') {
             if (!time || !date) {
                 toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, defina a data e o horário para confirmar.' });
+                setUpdating(false);
                 return;
             }
-            updateData.horario = time;
-            updateData.data_agendamento = date;
+
+            try {
+                // Tenta associar o pet à clínica (só funciona se clinica_id for nulo)
+                await supabase
+                    .from('animais')
+                    .update({ clinica_id: user.id })
+                    .eq('id', selectedRequest.animal_id)
+                    .is('clinica_id', null);
+
+                // Atualiza o status do agendamento
+                const { error: appointmentError } = await supabase
+                    .from('agendamentos')
+                    .update({ status: 'Confirmado', horario: time, data_agendamento: date })
+                    .eq('id', selectedRequest.id);
+
+                if (appointmentError) throw appointmentError;
+
+                toast({
+                    title: "Sucesso!",
+                    description: "Agendamento confirmado e paciente vinculado à clínica."
+                });
+
+            } catch (error) {
+                toast({ variant: "destructive", title: "Erro ao aprovar", description: error.message });
+            }
+        
         } else if (status === 'Recusado') {
-            updateData.motivo_recusa = rejectionReason;
+            try {
+                const { error } = await supabase
+                    .from('agendamentos')
+                    .update({ status: 'Recusado', motivo_recusa: rejectionReason })
+                    .eq('id', selectedRequest.id);
+                if (error) throw error;
+                toast({ title: "Solicitação Recusada." });
+            } catch (error) {
+                 toast({ variant: "destructive", title: "Erro ao recusar", description: error.message });
+            }
         }
 
-        try {
-            const { error } = await supabase
-                .from('agendamentos')
-                .update(updateData)
-                .eq('id', selectedRequest.id);
-
-            if (error) throw error;
-
-            toast({
-                title: "Sucesso!",
-                description: `Solicitação atualizada para: ${status}.`
-            });
-            fetchRequests();
-            setIsDialogOpen(false);
-            setSelectedRequest(null);
-        } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Erro ao atualizar status",
-                description: error.message,
-            });
-        }
+        setUpdating(false);
+        fetchRequests();
+        setIsDialogOpen(false);
+        setSelectedRequest(null);
     };
-
 
     return (
         <>
@@ -198,14 +216,21 @@ const ClinicAppointmentsPage = () => {
                                     </div>
                                 </div>
                             )}
+                            {/* ================== MUDANÇA 3: Botões com estado de loading ================== */}
                             <DialogFooter>
-                                <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                                <Button variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={updating}>Cancelar</Button>
                                 {isRejection ? (
-                                     <Button variant="destructive" onClick={() => handleUpdateStatus('Recusado')}><X className="mr-2 h-4 w-4" />Confirmar Recusa</Button>
+                                     <Button variant="destructive" onClick={() => handleUpdateStatus('Recusado')} disabled={updating}>
+                                        {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
+                                        Confirmar Recusa
+                                     </Button>
                                 ) : (
                                     <div className="flex gap-2">
-                                        <Button variant="destructive" onClick={() => setIsRejection(true)}><X className="mr-2 h-4 w-4" />Recusar</Button>
-                                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus('Confirmado')}><Check className="mr-2 h-4 w-4" />Aprovar</Button>
+                                        <Button variant="destructive" onClick={() => setIsRejection(true)} disabled={updating}><X className="mr-2 h-4 w-4" />Recusar</Button>
+                                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus('Confirmado')} disabled={updating}>
+                                            {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                            Aprovar
+                                        </Button>
                                     </div>
                                 )}
                             </DialogFooter>
